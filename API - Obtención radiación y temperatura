@@ -1,0 +1,63 @@
+!pip install geopy #instalamos geopy para obtener coordenadas a partir de nombre de ciudad
+from geopy.geocoders import Nominatim
+import requests
+import pandas as pd
+from datetime import datetime
+
+def obtener_prediccion(ciudad, fecha_str, hora_str):
+    # Convertimos ciudad en coordenadas
+    geolocator = Nominatim(user_agent="prediccion_solar")
+    location = geolocator.geocode(ciudad + ", España")
+
+    if location is None:
+        raise ValueError("Ciudad no encontrada")
+
+    lat, lon = location.latitude, location.longitude
+
+    # Petición a Open-Meteo
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?"
+        f"latitude={lat}&longitude={lon}"
+        f"&hourly=temperature_2m,shortwave_radiation"
+        f"&timezone=Europe%2FMadrid"
+    )
+    response = requests.get(url)
+    data = response.json()
+
+    # Transformamos a DataFrame
+    df = pd.DataFrame({
+        "timestamp": data["hourly"]["time"],
+        "temperatura": data["hourly"]["temperature_2m"],
+        "irradiacion": data["hourly"]["shortwave_radiation"]
+    })
+
+    # Unimos fecha y hora
+    fecha_hora_objetivo = f"{fecha_str}T{hora_str}:00"
+    fila = df[df["timestamp"] == fecha_hora_objetivo]
+
+    if fila.empty:
+        raise ValueError("No hay datos para esa fecha y hora.")
+
+    resultado = fila.iloc[0]
+    return {
+        "ciudad": ciudad,
+        "fecha": fecha_str,
+        "hora": hora_str,
+        "temperatura": resultado["temperatura"],
+        "irradiacion": resultado["irradiacion"]
+    }
+
+# Entrada del usuario
+print("Introduce los datos para obtener la predicción:")
+
+ciudad_usuario = input("Ciudad: ")
+fecha_usuario = input("Fecha (YYYY-MM-DD): ")
+hora_usuario = input("Hora (HH, en formato 24h, por ejemplo 15 para las 3PM): ")
+
+# Ejecutamos la función
+try:
+    prediccion = obtener_prediccion(ciudad_usuario, fecha_usuario, hora_usuario)
+    print("\npredicción meteorológica:")
+    print(prediccion)
+except Exception as e:
+    print(f"\nError: {e}")
